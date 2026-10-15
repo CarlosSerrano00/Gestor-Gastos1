@@ -1,13 +1,13 @@
+import { AddExpenseModal } from '@/components/AddExpenseModal';
+import { ExpenseItem } from '@/components/ExpenseItem';
+import { MonthlyHeader } from '@/components/MonthlyHeader';
+import { LiquidGlassColors, Spacing } from '@/constants/theme';
+import { useExpenses } from '@/context/ExpenseContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { StatusBar } from 'expo-status-bar';
-import { MonthlyHeader } from '@/components/MonthlyHeader';
-import { ExpenseItem } from '@/components/ExpenseItem';
-import { AddExpenseModal } from '@/components/AddExpenseModal';
-import { useExpenses } from '@/context/ExpenseContext';
-import { LiquidGlassColors, Spacing } from '@/constants/theme';
 
 // Pantalla principal: total del mes, lista de gastos y el boton + para agregar
 export default function HomeScreen() {
