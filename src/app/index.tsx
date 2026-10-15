@@ -6,12 +6,12 @@ import { useExpenses } from '@/context/ExpenseContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Pantalla principal: total del mes, lista de gastos y el boton + para agregar
 export default function HomeScreen() {
-  const { getCurrentMonthExpenses } = useExpenses();
+  const { getCurrentMonthExpenses, isLoading } = useExpenses();
   const [modalVisible, setModalVisible] = useState(false);
   const expenses = getCurrentMonthExpenses();
 
@@ -33,8 +33,14 @@ export default function HomeScreen() {
 
             <MonthlyHeader />
 
-            {/* Si no hay gastos este mes mostramos un mensaje en vez de la lista */}
-            {expenses.length === 0 ? (
+            {/* Mientras se leen los datos guardados se muestra un indicador;
+                sin esto se veria un instante el mensaje de "no hay gastos" */}
+            {isLoading ? (
+              <View style={styles.emptyState}>
+                <ActivityIndicator size="large" color={LiquidGlassColors.primary} />
+              </View>
+            ) : expenses.length === 0 ? (
+              /* Si no hay gastos este mes mostramos un mensaje en vez de la lista */
               <View style={styles.emptyState}>
                 <Text style={styles.emptyIcon}>💸</Text>
                 <Text style={styles.emptyTitle}>No hay gastos registrados</Text>
