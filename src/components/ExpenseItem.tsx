@@ -1,18 +1,20 @@
-import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Expense, CATEGORY_ICONS } from '@/types/expense';
-import { GlassCard } from './GlassCard';
 import { LiquidGlassColors, Spacing } from '@/constants/theme';
+import { CATEGORY_ICONS, Expense } from '@/types/expense';
+import { LinearGradient } from 'expo-linear-gradient';
+import React from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { GlassCard } from './GlassCard';
 
 interface ExpenseItemProps {
   expense: Expense;
   index: number; // sirve para que cada fila entre un poquito despues de la anterior
+  onEdit: (expense: Expense) => void;
+  onDelete: (expense: Expense) => void;
 }
 
 // Una fila de la lista de gastos
-export const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, index }) => {
+export const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, index, onEdit, onDelete }) => {
   // Queda algo como "15 oct"
   const formattedDate = new Date(expense.date).toLocaleDateString('es-ES', {
     day: '2-digit',
@@ -51,11 +53,35 @@ export const ExpenseItem: React.FC<ExpenseItemProps> = ({ expense, index }) => {
                   {expense.description}
                 </Text>
               )}
+              {expense.invoiceUri && (
+                <View style={styles.invoiceLabel}>
+                  <Image source={{ uri: expense.invoiceUri }} style={styles.invoiceThumbnail} />
+                  <Text style={styles.invoiceText}>Comprobante adjunto</Text>
+                </View>
+              )}
             </View>
           </View>
           <View style={styles.rightSection}>
             <Text style={styles.amount}>{formattedAmount}</Text>
             <Text style={styles.date}>{formattedDate}</Text>
+            <View style={styles.actions}>
+              <TouchableOpacity
+                onPress={() => onEdit(expense)}
+                style={styles.actionButton}
+                accessibilityRole="button"
+                accessibilityLabel="Editar gasto"
+              >
+                <Text style={styles.actionIcon}>✎</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onDelete(expense)}
+                style={styles.actionButton}
+                accessibilityRole="button"
+                accessibilityLabel="Eliminar gasto"
+              >
+                <Text style={styles.deleteIcon}>×</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </GlassCard>
@@ -115,5 +141,42 @@ const styles = StyleSheet.create({
   date: {
     fontSize: 12,
     color: LiquidGlassColors.glassTextSecondary,
+  },
+  actions: {
+    flexDirection: 'row',
+    marginTop: Spacing.one,
+    gap: Spacing.one,
+  },
+  actionButton: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.55)',
+  },
+  actionIcon: {
+    color: LiquidGlassColors.glassText,
+    fontSize: 19,
+  },
+  deleteIcon: {
+    color: LiquidGlassColors.secondary,
+    fontSize: 24,
+    lineHeight: 26,
+  },
+  invoiceLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing.one,
+    gap: Spacing.one,
+  },
+  invoiceThumbnail: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+  },
+  invoiceText: {
+    color: LiquidGlassColors.glassTextSecondary,
+    fontSize: 11,
   },
 });

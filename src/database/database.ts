@@ -12,7 +12,15 @@ export async function initDatabase(db: SQLiteDatabase): Promise<void> {
             amount REAL NOT NULL,   -- REAL=número con decimales
             category TEXT NOT NULL, 
             date TEXT NOT NULL,   -- fecha en formato ISO 8601
-            description TEXT    -- puede ser NULL porque es opcional
+            description TEXT,    -- puede ser NULL porque es opcional
+            invoice_uri TEXT     -- comprobante opcional almacenado localmente
         );
     `);
+
+    const columns = await db.getAllAsync<{ name: string }>(
+        'PRAGMA table_info(expenses)'
+    );
+    if (!columns.some((column) => column.name === 'invoice_uri')) {
+        await db.execAsync('ALTER TABLE expenses ADD COLUMN invoice_uri TEXT');
+    }
 }

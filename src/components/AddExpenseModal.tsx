@@ -1,11 +1,14 @@
 import { LiquidGlassColors, Spacing } from '@/constants/theme';
 import { useExpenses } from '@/context/ExpenseContext';
-import { CATEGORIES, Category, CATEGORY_ICONS } from '@/types/expense';
+import { CATEGORIES, Category, CATEGORY_ICONS, Expense } from '@/types/expense';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import { BlurView } from 'expo-blur';
+import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
 import {
   Alert,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -21,6 +24,7 @@ import Animated, { FadeIn, SlideInDown } from 'react-native-reanimated';
 interface AddExpenseModalProps {
   visible: boolean;
   onClose: () => void;
+  expense?: Expense | null;
 }
 
 // Modal que sube desde abajo para registrar un gasto.
@@ -28,24 +32,40 @@ interface AddExpenseModalProps {
 export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
   visible,
   onClose,
+  expense,
 }) => {
-  const { addExpense } = useExpenses();
+  const { addExpense, updateExpense } = useExpenses();
   // El monto es string porque asi trabaja el TextInput; se pasa a numero al guardar
-  const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState<Category | null>(null);
-  const [description, setDescription] = useState('');
+  const [amount, setAmount] = useState(expense ? String(expense.amount) : '');
+  const [category, setCategory] = useState<Category | null>(expense?.category ?? null);
+  const [description, setDescription] = useState(expense?.description ?? '');
+  const [date, setDate] = useState(expense ? new Date(expense.date) : new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [invoiceUri, setInvoiceUri] = useState<string | undefined>(expense?.invoiceUri);
 
-    // async porque ahora hay que esperar a que el gasto se guarde en el telefono
   const handleSubmit = async () => {
-    if (!amount || !category) return;
- 
+    if (!amount || !/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {
+      Alert.alert('Monto obligatorio', 'Ingresa un monto válido con máximo dos decimales.');
+      return;
+    }
+    if (!category) {
+      Alert.alert('Categoría obligatoria', 'Selecciona una categoría para guardar el gasto.');
+      return;
+    }
+
     try {
-      await addExpense({
-        amount: parseFloat(amount),
+      const expenseData = {
+        amount: Number(amount),
         category,
-        date: new Date(),
+        date,
         description: description.trim() || undefined,
-      });
+        invoiceUri,
+      };
+      if (expense) {
+        await updateExpense({ ...expense, ...expenseData });
+      } else {
+        await addExpense(expenseData);
+      }
     } catch (error) {
       // Si no se pudo guardar, se avisa y el modal queda abierto con los datos
       console.error('Error al guardar el gasto', error);
@@ -57,16 +77,58 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
     setAmount('');
     setCategory(null);
     setDescription('');
+    setDate(new Date());
+    setInvoiceUri(undefined);
     onClose();
   };
 
-
-  // Igual que al guardar, se limpia el formulario para que no quede texto viejo
   const handleClose = () => {
     setAmount('');
     setCategory(null);
     setDescription('');
+    setDate(new Date());
+    setInvoiceUri(undefined);
+    setShowDatePicker(false);
     onClose();
+  };
+
+  const handleAmountChange = (value: string) => {
+    const normalized = value.replace(',', '.').replace(/[^\d.]/g, '');
+    const [whole, ...fractionParts] = normalized.split('.');
+    const fraction = fractionParts.join('').slice(0, 2);
+    const integerPart = whole || (fractionParts.length ? '0' : '');
+    setAmount(fractionParts.length ? `${integerPart}.${fraction}` : integerPart);
+  };
+
+  const handleDescriptionChange = (value: string) => {
+    setDescription(value.replace(/[^\p{L}\p{N} ]/gu, '').slice(0, 400));
+  };
+
+  const pickInvoice = async (source: 'camera' | 'library') => {
+    const permission = source === 'camera'
+      ? await ImagePicker.requestCameraPermissionsAsync()
+      : await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('Permiso requerido', 'Permite el acceso para adjuntar una foto.');
+      return;
+    }
+
+    const result = source === 'camera'
+      ? await ImagePicker.launchCameraAsync({ allowsEditing: true, quality: 0.8 })
+      : await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          quality: 0.8,
+        });
+    if (!result.canceled) setInvoiceUri(result.assets[0].uri);
+  };
+
+  const chooseInvoiceSource = () => {
+    Alert.alert('Adjuntar comprobante', 'Elige de dónde obtener la foto.', [
+      { text: 'Galería', onPress: () => void pickInvoice('library') },
+      { text: 'Cámara', onPress: () => void pickInvoice('camera') },
+      { text: 'Cancelar', style: 'cancel' },
+    ]);
   };
 
   return (
@@ -105,7 +167,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                 keyboardShouldPersistTaps="handled"
                 contentContainerStyle={styles.scrollContent}
               >
-                <Text style={styles.title}>Agregar Gasto</Text>
+                <Text style={styles.title}>{expense ? 'Editar gasto' : 'Agregar gasto'}</Text>
 
                 <View style={styles.inputSection}>
                   <Text style={styles.label}>Monto (USD)</Text>
@@ -114,12 +176,39 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                     <TextInput
                       style={styles.input}
                       value={amount}
-                      onChangeText={setAmount}
+                      onChangeText={handleAmountChange}
                       placeholder="0.00"
                       keyboardType="decimal-pad"
                       placeholderTextColor={LiquidGlassColors.glassTextSecondary}
                     />
                   </View>
+                </View>
+
+                <View style={styles.inputSection}>
+                  <Text style={styles.label}>Fecha</Text>
+                  <TouchableOpacity
+                    style={styles.dateButton}
+                    onPress={() => setShowDatePicker(true)}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {date.toLocaleDateString('es-ES', {
+                        day: '2-digit', month: 'long', year: 'numeric',
+                      })}
+                    </Text>
+                    <Text style={styles.dateButtonIcon}>▦</Text>
+                  </TouchableOpacity>
+                  {showDatePicker && (
+                    <DateTimePicker
+                      value={date}
+                      mode="date"
+                      maximumDate={new Date()}
+                      onChange={(_, selectedDate) => {
+                        setShowDatePicker(Platform.OS === 'ios');
+                        if (selectedDate) setDate(selectedDate);
+                      }}
+                    />
+                  )}
                 </View>
 
                 <View style={styles.inputSection}>
@@ -173,11 +262,32 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                   <TextInput
                     style={[styles.input, styles.descriptionInput]}
                     value={description}
-                    onChangeText={setDescription}
+                    onChangeText={handleDescriptionChange}
                     placeholder="Ej: Almuerzo, transporte a la universidad..."
                     placeholderTextColor={LiquidGlassColors.glassTextSecondary}
                     multiline
+                    maxLength={400}
                   />
+                  <Text style={styles.characterCount}>{description.length}/400</Text>
+                </View>
+
+                <View style={styles.inputSection}>
+                  <Text style={styles.label}>Factura o comprobante (opcional)</Text>
+                  <View style={styles.invoiceActions}>
+                    <TouchableOpacity style={styles.invoiceButton} onPress={chooseInvoiceSource}>
+                      <Text style={styles.invoiceButtonText}>＋ Adjuntar foto</Text>
+                    </TouchableOpacity>
+                    {invoiceUri && (
+                      <TouchableOpacity
+                        style={styles.removeInvoiceButton}
+                        onPress={() => setInvoiceUri(undefined)}
+                        accessibilityLabel="Quitar comprobante"
+                      >
+                        <Text style={styles.removeInvoiceText}>Quitar</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  {invoiceUri && <Image source={{ uri: invoiceUri }} style={styles.invoicePreview} />}
                 </View>
 
                 <View style={styles.buttonContainer}>
@@ -191,10 +301,8 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                   <TouchableOpacity
                     style={[
                       styles.submitButton,
-                      (!amount || !category) && styles.submitButtonDisabled,
                     ]}
                     onPress={handleSubmit}
-                    disabled={!amount || !category}
                   >
                     <LinearGradient
                       colors={[LiquidGlassColors.primary, LiquidGlassColors.secondary]}
@@ -202,7 +310,7 @@ export const AddExpenseModal: React.FC<AddExpenseModalProps> = ({
                       end={{ x: 1, y: 1 }}
                       style={styles.submitGradient}
                     >
-                      <Text style={styles.submitButtonText}>Agregar</Text>
+                      <Text style={styles.submitButtonText}>{expense ? 'Guardar cambios' : 'Agregar'}</Text>
                     </LinearGradient>
                   </TouchableOpacity>
                 </View>
@@ -265,6 +373,62 @@ const styles = StyleSheet.create({
   },
   inputSection: {
     marginBottom: Spacing.four,
+  },
+  dateButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: LiquidGlassColors.glassBorder,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.three,
+  },
+  dateButtonText: {
+    color: LiquidGlassColors.glassText,
+    fontSize: 16,
+    textTransform: 'capitalize',
+  },
+  dateButtonIcon: {
+    color: LiquidGlassColors.primary,
+    fontSize: 20,
+  },
+  characterCount: {
+    color: LiquidGlassColors.glassTextSecondary,
+    fontSize: 12,
+    textAlign: 'right',
+    marginTop: Spacing.one,
+  },
+  invoiceActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+  },
+  invoiceButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderRadius: Spacing.two,
+    borderWidth: 1,
+    borderColor: LiquidGlassColors.glassBorder,
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  invoiceButtonText: {
+    color: LiquidGlassColors.glassText,
+    fontWeight: '600',
+  },
+  removeInvoiceButton: {
+    padding: Spacing.two,
+  },
+  removeInvoiceText: {
+    color: LiquidGlassColors.secondary,
+    fontWeight: '600',
+  },
+  invoicePreview: {
+    width: 88,
+    height: 88,
+    borderRadius: Spacing.two,
+    marginTop: Spacing.two,
   },
   label: {
     fontSize: 14,

@@ -37,7 +37,16 @@
       "expo-image",
       "expo-font",
       "expo-web-browser",
-      "expo-sqlite"
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "La aplicación necesita acceso a tus fotos para adjuntar comprobantes.",
+          "cameraPermission": "La aplicación necesita acceso a la cámara para fotografiar comprobantes.",
+          "microphonePermission": false
+        }
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true,

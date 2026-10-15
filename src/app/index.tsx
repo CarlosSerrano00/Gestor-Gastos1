@@ -3,17 +3,40 @@ import { ExpenseItem } from '@/components/ExpenseItem';
 import { MonthlyHeader } from '@/components/MonthlyHeader';
 import { LiquidGlassColors, Spacing } from '@/constants/theme';
 import { useExpenses } from '@/context/ExpenseContext';
+import { Expense } from '@/types/expense';
 import { LinearGradient } from 'expo-linear-gradient';
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 // Pantalla principal: total del mes, lista de gastos y el boton + para agregar
 export default function HomeScreen() {
-  const { getCurrentMonthExpenses, isLoading } = useExpenses();
+  const { deleteExpense, expenses, isLoading } = useExpenses();
   const [modalVisible, setModalVisible] = useState(false);
-  const expenses = getCurrentMonthExpenses();
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [sortByAmount, setSortByAmount] = useState(false);
+  const sortedExpenses = sortByAmount
+    ? [...expenses].sort((first, second) => second.amount - first.amount)
+    : [...expenses].sort((first, second) => second.date.getTime() - first.date.getTime());
+
+  const confirmDelete = (expense: Expense) => {
+    Alert.alert('Eliminar gasto', '¿Quieres eliminar este gasto?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteExpense(expense.id);
+          } catch (error) {
+            console.error('Error al eliminar el gasto', error);
+            Alert.alert('Error', 'No se pudo eliminar el gasto. Intenta de nuevo.');
+          }
+        },
+      },
+    ]);
+  };
 
   return (
     <View style={styles.container}>
@@ -33,13 +56,32 @@ export default function HomeScreen() {
 
             <MonthlyHeader />
 
+            <View style={styles.sortControl}>
+              <TouchableOpacity
+                style={[styles.sortOption, !sortByAmount && styles.sortOptionActive]}
+                onPress={() => setSortByAmount(false)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: !sortByAmount }}
+              >
+                <Text style={[styles.sortText, !sortByAmount && styles.sortTextActive]}>Recientes</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.sortOption, sortByAmount && styles.sortOptionActive]}
+                onPress={() => setSortByAmount(true)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sortByAmount }}
+              >
+                <Text style={[styles.sortText, sortByAmount && styles.sortTextActive]}>Mayor monto</Text>
+              </TouchableOpacity>
+            </View>
+
             {/* Mientras se leen los datos guardados se muestra un indicador;
                 sin esto se veria un instante el mensaje de "no hay gastos" */}
             {isLoading ? (
               <View style={styles.emptyState}>
                 <ActivityIndicator size="large" color={LiquidGlassColors.primary} />
               </View>
-            ) : expenses.length === 0 ? (
+            ) : sortedExpenses.length === 0 ? (
               /* Si no hay gastos este mes mostramos un mensaje en vez de la lista */
               <View style={styles.emptyState}>
                 <Text style={styles.emptyIcon}>💸</Text>
@@ -50,10 +92,18 @@ export default function HomeScreen() {
               </View>
             ) : (
               <FlatList
-                data={expenses}
+                data={sortedExpenses}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item, index }) => (
-                  <ExpenseItem expense={item} index={index} />
+                  <ExpenseItem
+                    expense={item}
+                    index={index}
+                    onEdit={(selectedExpense) => {
+                      setEditingExpense(selectedExpense);
+                      setModalVisible(true);
+                    }}
+                    onDelete={confirmDelete}
+                  />
                 )}
                 contentContainerStyle={styles.listContent}
                 showsVerticalScrollIndicator={false}
@@ -64,7 +114,10 @@ export default function HomeScreen() {
           {/* Boton + de la esquina */}
           <TouchableOpacity
             style={styles.fab}
-            onPress={() => setModalVisible(true)}
+            onPress={() => {
+              setEditingExpense(null);
+              setModalVisible(true);
+            }}
             activeOpacity={0.8}
           >
             <LinearGradient
@@ -78,8 +131,13 @@ export default function HomeScreen() {
           </TouchableOpacity>
 
           <AddExpenseModal
+            key={editingExpense?.id ?? 'new-expense'}
             visible={modalVisible}
-            onClose={() => setModalVisible(false)}
+            expense={editingExpense}
+            onClose={() => {
+              setModalVisible(false);
+              setEditingExpense(null);
+            }}
           />
         </SafeAreaView>
       </LinearGradient>
@@ -136,6 +194,32 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 100,
+  },
+  sortControl: {
+    flexDirection: 'row',
+    alignSelf: 'flex-start',
+    marginBottom: Spacing.two,
+    padding: Spacing.one,
+    borderRadius: Spacing.two,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    borderWidth: 1,
+    borderColor: LiquidGlassColors.glassBorder,
+  },
+  sortOption: {
+    paddingHorizontal: Spacing.three,
+    paddingVertical: Spacing.two,
+    borderRadius: Spacing.one,
+  },
+  sortOptionActive: {
+    backgroundColor: LiquidGlassColors.primary,
+  },
+  sortText: {
+    color: LiquidGlassColors.glassTextSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sortTextActive: {
+    color: LiquidGlassColors.glassTextLight,
   },
   emptyState: {
     flex: 1,
